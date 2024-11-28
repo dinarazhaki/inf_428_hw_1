@@ -3,6 +3,7 @@ import pandas as pd
 import os
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
+import matplotlib.pyplot as plt
 
 def generate_random_data(mean, variance, num_samples):
     if variance == 0:
@@ -35,8 +36,11 @@ def create_index():
         }
     }
     es.indices.create(index=index_name, body=mappings)
-    print(f"Index '{index_name}' created.")
-
+    if not es.indices.exists(index=index_name):
+        es.indices.create(index=index_name, body=mappings)
+        print(f"Index {index_name} created successfully.")
+    else:
+        print(f"Index {index_name} already exists.")
 def populate_index_from_csv(case_name):
     index_name = "threat_scores"
     actions = []
