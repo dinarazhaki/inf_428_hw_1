@@ -1,79 +1,94 @@
 import unittest
+import pandas as pd
 import numpy as np
-from task_2 import generate_random_data, calculate_aggregated_threat
+from task_2 import calculate_aggregated_threat, create_index, populate_index_from_csv, calculate_aggregated_threat_from_es
 
+def read_data_from_csv(csv_file):
+    try:
+        file_path = f"task_2/{csv_file}"
+        df = pd.read_csv(file_path)
+        return df["Threat_Score"].tolist()
+    except FileNotFoundError:
+        print(f"Error: {file_path} not found.")
+        return []
+
+
+class TestElasticsearchAggregatedThreatScore(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        create_index()
+
+    def populate_data_in_es(self, case_name):
+        populate_index_from_csv(case_name)
+
+    def test_aggregated_threat_es_case_1(self):
+        case_name = "case_1"
+        self.populate_data_in_es(case_name)
+        result = calculate_aggregated_threat_from_es(case_name)
+        self.assertTrue(35 <= result <= 45)
+
+    def test_aggregated_threat_es_case_2(self):
+        case_name = "case_2"
+        self.populate_data_in_es(case_name)
+        result = calculate_aggregated_threat_from_es(case_name)
+        self.assertTrue(30 <= result <= 45)
+
+    def test_aggregated_threat_es_case_3(self):
+        case_name = "case_3"
+        self.populate_data_in_es(case_name)
+        result = calculate_aggregated_threat_from_es(case_name)
+        self.assertTrue(20 <= result <= 40)
+
+    def test_aggregated_threat_es_case_4(self):
+        case_name = "case_4"
+        self.populate_data_in_es(case_name)
+        result = calculate_aggregated_threat_from_es(case_name)
+        self.assertTrue(30 <= result <= 60)
 
 class TestAggregatedThreatScore(unittest.TestCase):
 
     def setUp(self):
         np.random.seed(0)
 
-    def test_aggregated_threat_basic_case(self):
-        department_data = [
-            generate_random_data(mean=40, variance=10, num_samples=50),
-            generate_random_data(mean=40, variance=10, num_samples=50),
-            generate_random_data(mean=40, variance=10, num_samples=50),
-            generate_random_data(mean=40, variance=10, num_samples=50),
-            generate_random_data(mean=40, variance=10, num_samples=50)
-        ]
-        importance_weights = [1, 1, 1, 1, 1]
-        result = calculate_aggregated_threat(department_data, importance_weights)
+    def populate_data_from_csv(self, case_name):
+        department_data = {f"Dept{i}": [] for i in range(1, 6)}
 
-        self.assertAlmostEqual(result, 40, delta=5)
+        for dept_num in range(1, 6):
+            csv_file = f"{case_name}_Dept{dept_num}.csv"
+            department_name = f"Dept{dept_num}"
+            threat_scores = read_data_from_csv(csv_file)
+            department_data[department_name] = threat_scores
 
-    def test_aggregated_threat_different_importance(self):
-        department_data = [
-            generate_random_data(mean=30, variance=10, num_samples=100),
-            generate_random_data(mean=60, variance=10, num_samples=150),
-            generate_random_data(mean=20, variance=5, num_samples=75),
-            generate_random_data(mean=70, variance=15, num_samples=120),
-            generate_random_data(mean=50, variance=10, num_samples=90)
-        ]
-        importance_weights = [1, 5, 1, 3, 2]
-        result = calculate_aggregated_threat(department_data, importance_weights)
+        return department_data
 
-        self.assertTrue(50 <= result <= 70)
+    #all departments have similar threat scores
+    def test_aggregated_threat_case_1(self):
+        department_data = self.populate_data_from_csv("case_1")
+        result = calculate_aggregated_threat(department_data)
+        self.assertTrue(35 <= result <= 45)
 
-    def test_aggregated_threat_outliers(self):
-        department_data = [
-            generate_random_data(mean=20, variance=5, num_samples=50),
-            generate_random_data(mean=90, variance=0, num_samples=10),
-            generate_random_data(mean=30, variance=5, num_samples=60),
-            generate_random_data(mean=40, variance=10, num_samples=100),
-            generate_random_data(mean=25, variance=5, num_samples=80)
-        ]
-        importance_weights = [1, 1, 1, 1, 1]
-        result = calculate_aggregated_threat(department_data, importance_weights)
+    #one department has high threat scores
+    def test_aggregated_threat_case_2(self):
+        department_data = self.populate_data_from_csv("case_2")
+        result = calculate_aggregated_threat(department_data)
+        for dept, scores in department_data.items():
+            print(f"{dept}: {scores[:5]}...")
+        self.assertTrue(30 <= result <= 45)
 
+    #high outliers in one department
+    def test_aggregated_threat_case_3(self):
+        department_data = self.populate_data_from_csv("case_3")
+        result = calculate_aggregated_threat(department_data)
+        for dept, scores in department_data.items():
+            print(f"{dept}: {scores[:5]}...")
+        self.assertTrue(20 <= result <= 40)
+
+    #different number of users across departments
+    def test_aggregated_threat_case_4(self):
+        department_data = self.populate_data_from_csv("case_4")
+        result = calculate_aggregated_threat(department_data)
         self.assertTrue(30 <= result <= 60)
-
-    def test_aggregated_threat_all_low_scores(self):
-        department_data = [
-            generate_random_data(mean=5, variance=2, num_samples=60),
-            generate_random_data(mean=10, variance=3, num_samples=40),
-            generate_random_data(mean=7, variance=2, num_samples=50),
-            generate_random_data(mean=8, variance=1, num_samples=55),
-            generate_random_data(mean=6, variance=2, num_samples=45)
-        ]
-        importance_weights = [2, 2, 2, 2, 2]
-        result = calculate_aggregated_threat(department_data, importance_weights)
-
-        self.assertTrue(5 <= result <= 10)
-
-    def test_aggregated_threat_high_importance_on_low_score(self):
-        department_data = [
-            generate_random_data(mean=5, variance=1, num_samples=50),  # Low score
-            generate_random_data(mean=40, variance=10, num_samples=70),
-            generate_random_data(mean=50, variance=10, num_samples=80),
-            generate_random_data(mean=60, variance=10, num_samples=60),
-            generate_random_data(mean=70, variance=10, num_samples=90)
-        ]
-        importance_weights = [5, 1, 1, 1, 1]
-        result = calculate_aggregated_threat(department_data, importance_weights)
-
-        self.assertTrue(10 <= result <= 30)
-
 
 if __name__ == "__main__":
     unittest.main()
-
